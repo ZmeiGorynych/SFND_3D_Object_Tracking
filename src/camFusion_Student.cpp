@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include <numeric>
+#include <map>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
@@ -151,8 +152,43 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
     // ...
 }
 
+//void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
+//{}
+
+bool in_box(DataFrame& frame, int kpt_idx, BoundingBox& box){
+    return  false;
+}
 
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
 {
-    // ...
+    // count all pairwise occurrences
+    std::map<int, std::map<int, int>> pre_matches;
+    for(auto match: matches){
+        for(auto prevBox: prevFrame.boundingBoxes){
+            pre_matches[prevBox.boxID] = std::map<int, int>();
+            for(auto currBox: currFrame.boundingBoxes){
+                if(in_box(prevFrame, match.queryIdx, prevBox) && in_box(currFrame, match.trainIdx, currBox)){
+                    if(pre_matches[prevBox.boxID].find(currBox.boxID)==pre_matches[prevBox.boxID].end())
+                        pre_matches[prevBox.boxID][currBox.boxID] = 0;
+                    pre_matches[prevBox.boxID][currBox.boxID] ++;
+                }
+            }
+        }
+    }
+    // now find all best matches
+    for(auto const& x: pre_matches){
+        auto tmp = x.second;
+        if(tmp.size()>0){
+            int best_count = -1;
+            int bestCurrBox = -1;
+            for(auto const& y: tmp) {
+                auto cnt = y.second;
+                if (cnt > best_count) {
+                    best_count = cnt;
+                    bestCurrBox = y.first;
+                }
+            }
+            bbBestMatches[x.first] = bestCurrBox;
+        }
+    }
 }
