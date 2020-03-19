@@ -151,15 +151,14 @@ double detKeypointsShiTomasiHarris(vector<cv::KeyPoint> &keypoints, cv::Mat &img
     return 1000.0*t;
 }
 
-double detKeypointsShiTomasi(vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool bVis){
-    return detKeypointsShiTomasiHarris(keypoints, img, bVis, false);
-}
-
-double detKeypointsHarris(vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool bVis){
-    return detKeypointsShiTomasiHarris(keypoints, img, bVis, true);
-}
 
 double detKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, std::string detectorType, bool bVis){
+    if(detectorType.compare("SHITOMASI") == 0)
+        return detKeypointsShiTomasiHarris(keypoints, img, bVis, false);
+
+    if(detectorType.compare("HARRIS") == 0)
+        return detKeypointsShiTomasiHarris(keypoints, img, bVis, true);
+
     double t = (double)cv::getTickCount();
 
     //FAST, BRISK, ORB, AKAZE, SIFT

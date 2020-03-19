@@ -152,30 +152,41 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
     // ...
 }
 
-//void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
-//{}
 
 bool in_box(DataFrame& frame, int kpt_idx, BoundingBox& box){
-    return  false;
+    auto keypoint = frame.keypoints[kpt_idx];
+    if(box.roi.contains(keypoint.pt)) {
+        return true;
+    }else{
+        return  false;
+    }
 }
 
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
 {
     // count all pairwise occurrences
     std::map<int, std::map<int, int>> pre_matches;
+
     for(auto match: matches){
         for(auto prevBox: prevFrame.boundingBoxes){
-            pre_matches[prevBox.boxID] = std::map<int, int>();
             for(auto currBox: currFrame.boundingBoxes){
-                if(in_box(prevFrame, match.queryIdx, prevBox) && in_box(currFrame, match.trainIdx, currBox)){
+                if(in_box(prevFrame, match.queryIdx, prevBox) &&
+                    in_box(currFrame, match.trainIdx, currBox)){
+                    // if there is no entry for the current box yet, create it
+                    if(pre_matches.find(prevBox.boxID)==pre_matches.end())
+                        pre_matches[prevBox.boxID] = std::map<int, int>();
                     if(pre_matches[prevBox.boxID].find(currBox.boxID)==pre_matches[prevBox.boxID].end())
                         pre_matches[prevBox.boxID][currBox.boxID] = 0;
                     pre_matches[prevBox.boxID][currBox.boxID] ++;
+                    //cout << "matching boxes " << prevBox.boxID << " " << currBox.boxID << endl;
                 }
             }
         }
     }
-    // now find all best matches
+
+    std::map<int, std::pair<int, int>> best_scores; // (currId, (prevID, count))
+    // now find the best current match for each box from prev frame
+    // need to take care that we match each current box at most once
     for(auto const& x: pre_matches){
         auto tmp = x.second;
         if(tmp.size()>0){
@@ -188,7 +199,17 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
                     bestCurrBox = y.first;
                 }
             }
-            bbBestMatches[x.first] = bestCurrBox;
+            // if we never matched to this current box or the old match was worse, just insert it
+            if(best_scores.find(bestCurrBox)==best_scores.end() || best_scores[bestCurrBox].second < best_count)
+                best_scores[bestCurrBox] = std::pair<int, int>(x.first, best_count);
+            //cout << "matched boxes " << x.first << " and " << bestCurrBox << " count " << best_count << endl;
         }
+    }
+
+    cout <<"final matching result: " << endl ;
+    // now dump the results into the output, remember best_scores is keyed by currId not prevId
+    for(auto const& x: best_scores){
+        bbBestMatches[x.second.first] = x.first;
+        //cout << "matched boxes " << x.second.first << " and " << x.first << endl;
     }
 }
