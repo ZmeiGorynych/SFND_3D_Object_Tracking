@@ -63,7 +63,7 @@ void clusterLidarWithROI(std::vector<BoundingBox> &boundingBoxes, std::vector<Li
 }
 
 
-void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, cv::Size imageSize, bool bWait)
+void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, cv::Size imageSize, bool bWait, string windowName)
 {
     // create topview image
     cv::Mat topviewImg(imageSize, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -121,7 +121,7 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
     }
 
     // display image
-    string windowName = "3D Objects";
+
     cv::namedWindow(windowName, 1);
     cv::imshow(windowName, topviewImg);
 
@@ -263,6 +263,7 @@ struct NearnessSorter{
 
 
 double distanceFromPointCloud(std::vector<LidarPoint> &lidarPoints, int dropNearest, int averageOver){
+    std::sort(lidarPoints.begin(), lidarPoints.end(), NearnessSorter());
     double count = 0.0;
     double dist_sum = 0.0;
     for(int i=dropNearest; i<dropNearest+averageOver && i<lidarPoints.size(); i++){
@@ -280,9 +281,6 @@ double distanceFromPointCloud(std::vector<LidarPoint> &lidarPoints, int dropNear
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
                      std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC)
 {
-    std::sort(lidarPointsPrev.begin(), lidarPointsPrev.end(), NearnessSorter());
-    std::sort(lidarPointsCurr.begin(), lidarPointsCurr.end(), NearnessSorter());
-
     double prev_dist = distanceFromPointCloud(lidarPointsPrev, 3, 10);
     double curr_dist = distanceFromPointCloud(lidarPointsCurr, 3, 10);
     if(prev_dist>=0 && curr_dist>=0){

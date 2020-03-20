@@ -73,15 +73,17 @@ int main(int argc, const char *argv[])
     int dataBufferSize = 2;       // no. of images which are held in memory (ring buffer) at the same time
 
     bool bVis = false;
+    bool logToFile = true;
 
-    vector<string> detectorTypes = {"SHITOMASI", "HARRIS", "FAST", "BRISK", "ORB", "AKAZE", "SIFT"};
+    vector<string> detectorTypes ={"SIFT"}; // {"SHITOMASI", "HARRIS", "FAST", "BRISK", "ORB", "AKAZE", "SIFT"};
     // INCLUDING ORB IN THE BELOW CAUSES AN OUT OF MEMORY ERROR!
-    vector<string> descriptorKinds = {"BRISK", "BRIEF", "FREAK", "AKAZE", "SIFT", "ORB" };//
+    vector<string> descriptorKinds = {"AKAZE"}; //{"BRISK", "BRIEF", "FREAK", "AKAZE", "SIFT", "ORB" };//
 
-    // visualize results
     std::ofstream ttcstats;
-    ttcstats.open("/home/ubuntu/shared/GitHub/SFND/SFND_3D_Object_Tracking/ttc_stats.csv");
-    ttcstats << "detector, descriptor, frame, lidar_ttc, image_ttc" << endl;
+    if(logToFile){
+    // visualize results
+    ttcstats.open("/home/ubuntu/shared/GitHub/SFND/SFND_3D_Object_Tracking/ttc_stats_2.csv");
+    ttcstats << "detector,descriptor,frame,lidar_ttc,image_ttc,lidar_distance" << endl;}
 
 
 
@@ -150,7 +152,7 @@ int main(int argc, const char *argv[])
         bVis = false;
         if(bVis)
         {
-            show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 10.0), cv::Size(2000, 2000), true);
+            show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(1000, 1000), true);
         }
         bVis = false;
 
@@ -277,14 +279,30 @@ int main(int argc, const char *argv[])
                     //// EOF STUDENT ASSIGNMENT
 
                     //// STUDENT ASSIGNMENT
+
                     //// TASK FP.3 -> assign enclosed keypoint matches to bounding box (implement -> clusterKptMatchesWithROI)
                     //// TASK FP.4 -> compute time-to-collision based on camera (implement -> computeTTCCamera)
                     double ttcCamera;
                     clusterKptMatchesWithROI(*currBB, (dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->kptMatches);                    
                     computeTTCCamera((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, currBB->kptMatches, sensorFrameRate, ttcCamera);
+
+                    cout << detectorType << "," << descriptorType << "," << imgIndex << "," << ttcLidar << "," << ttcCamera << endl;
+                    if(false && ttcLidar > 20)
+                    {
+                        show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(1000, 1000), false, "CurrentObjects");
+                        show3DObjects((dataBuffer.end()-2)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(1000, 1000), false, "PreviousObjects");
+                    }
+
                     //// EOF STUDENT ASSIGNMENT
-                    ttcstats << detectorType << "," << descriptorType << "," << imgIndex <<
-                             "," << ttcLidar << "," << ttcCamera << endl;
+                    if(logToFile){
+                        if(imgIndex==1){
+                            ttcstats << detectorType << "," << descriptorType << "," << imgIndex -1 << "," << "NaN" <<
+                                     "," << "NaN" << "," << distanceFromPointCloud(prevBB->lidarPoints, 3, 10) << endl;
+                        }
+                        double lidar_distance = distanceFromPointCloud(currBB->lidarPoints, 3, 10);
+                        ttcstats << detectorType << "," << descriptorType << "," << imgIndex << "," << ttcLidar <<
+                            "," << ttcCamera << "," << lidar_distance << endl;
+                    }
                     bVis = false;
                     if (bVis)
                     {
@@ -301,16 +319,15 @@ int main(int argc, const char *argv[])
                         cv::imshow(windowName, visImg);
                         cout << "Press key to continue to next frame" << endl;
                         cv::waitKey(0);
-                    }
+                    } 
                     bVis = false;
 
                 } // eof TTC computation
             } // eof loop over all BB matches            
-
         }
-
     } // eof loop over all images
         }//eof loop over descriptor and detector types
-    ttcstats.close();
+    if(logToFile)
+        ttcstats.close();
     return 0;
 }
