@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <numeric>
 #include <map>
+#include <cmath>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
@@ -130,19 +131,76 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
     }
 }
 
-
 // associate a given bounding box with the keypoints it contains
 void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
 {
-    // ...
+    std::vector<cv::DMatch> candidateMatches;
+    double count, xsum, xsumsq, ysum, ysumsq;
+    for(auto& match: kptMatches)
+        // if the match is actually inside our box
+        if(boundingBox.keypointInds.count(match.trainIdx)){
+            candidateMatches.push_back(match);
+            auto prevKptLoc = kptsPrev[match.queryIdx].pt;
+            auto currKptLoc = kptsCurr[match.trainIdx].pt;
+            count ++;
+            xsum += prevKptLoc.x - currKptLoc.x;
+            xsumsq += pow(prevKptLoc.x - currKptLoc.x, 2);
+            ysum += prevKptLoc.y - currKptLoc.y;
+            ysumsq += pow(prevKptLoc.y - currKptLoc.y, 2);
+        }
+    if(count <0.5)
+        return;
+    double xmean = xsum/count;
+    double ymean = ysum/count;
+    double xstd = sqrt( xsumsq/count - xmean*xmean);
+    double ystd = sqrt( ysumsq/count - ymean*ymean);
+    double std_thresh = 1.0;
+
+    for(auto& match: candidateMatches){
+        auto prevKptLoc = kptsPrev[match.queryIdx].pt;
+        auto currKptLoc = kptsCurr[match.trainIdx].pt;
+        double xdist = prevKptLoc.x - currKptLoc.x;
+        double ydist = prevKptLoc.y - currKptLoc.y;
+        if( xdist < xmean + std_thresh*xstd &&
+            xdist > xmean - std_thresh*xstd &&
+            ydist < ymean + std_thresh*ystd &&
+            ydist > ymean - std_thresh*ystd)
+                boundingBox.kptMatches.push_back(match);
+    }
+
+    cout << "Filtered keypoint matches for box ID " << boundingBox.boxID << " from " << candidateMatches.size()
+        << " to " << boundingBox.kptMatches.size() << endl;
 }
 
+//simple median function inspired by https://stackoverflow.com/questions/2114797/compute-median-of-values-stored-in-vector-c
+double median(std::vector<double> x){
+    const auto middleItr = x.begin() + x.size()/2;
+    std::nth_element(x.begin(), middleItr, x.end());
+    return *middleItr;
+}
 
 // Compute time-to-collision (TTC) based on keypoint correspondences in successive images
 void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, 
-                      std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC, cv::Mat *visImg)
+                      std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC)
 {
-    // ...
+    double minDist = 100.0;
+
+    std::vector<double> ratios;
+    for(int i=0; i<kptMatches.size(); i++){
+        for(int j=i+1; j<kptMatches.size(); j++){
+            auto match = kptMatches[i];
+            auto match2 = kptMatches[j];
+            double d0 =  cv::norm(kptsPrev[match.queryIdx].pt-kptsPrev[match2.queryIdx].pt);
+            double d1 =  cv::norm(kptsCurr[match.trainIdx].pt-kptsPrev[match2.trainIdx].pt);
+            if (d1 > minDist && d0> minDist)
+                ratios.emplace_back(d1/d0);
+        }
+
+    }
+    double median_ratio = median(ratios);
+    double dt = 1/frameRate; // seconds between frames
+    TTC = -dt/(1.0 - median_ratio);
+
 }
 
 
@@ -185,15 +243,6 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
     }
 }
 
-
-//bool in_box(DataFrame& frame, int kpt_idx, BoundingBox& box){
-//    auto keypoint = frame.keypoints[kpt_idx];
-//    if(box.roi.contains(keypoint.pt)) {
-//        return true;
-//    }else{
-//        return  false;
-//    }
-//}
 
 void assignKeypointsToBoxes(DataFrame &frame){
     for(auto& box: frame.boundingBoxes)
