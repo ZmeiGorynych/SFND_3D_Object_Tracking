@@ -146,21 +146,64 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
 }
 
 
+
+struct NearnessSorter{
+    inline bool operator() (const LidarPoint& p1, const LidarPoint& p2){
+        return p1.horizontal_distance() < p2.horizontal_distance();
+    }
+};
+
+
+double distanceFromPointCloud(std::vector<LidarPoint> &lidarPoints, int dropNearest, int averageOver){
+    double count = 0.0;
+    double dist_sum = 0.0;
+    for(int i=dropNearest; i<dropNearest+averageOver && i<lidarPoints.size(); i++){
+        count ++;
+        dist_sum += lidarPoints[i].horizontal_distance();
+    }
+
+    if(count < 0.5)
+        return -1;
+    else
+        return dist_sum/count;
+}
+
+
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
                      std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC)
 {
-    // ...
-}
+    std::sort(lidarPointsPrev.begin(), lidarPointsPrev.end(), NearnessSorter());
+    std::sort(lidarPointsCurr.begin(), lidarPointsCurr.end(), NearnessSorter());
 
-
-bool in_box(DataFrame& frame, int kpt_idx, BoundingBox& box){
-    auto keypoint = frame.keypoints[kpt_idx];
-    if(box.roi.contains(keypoint.pt)) {
-        return true;
-    }else{
-        return  false;
+    double prev_dist = distanceFromPointCloud(lidarPointsPrev, 3, 10);
+    double curr_dist = distanceFromPointCloud(lidarPointsCurr, 3, 10);
+    if(prev_dist>=0 && curr_dist>=0){
+        double frames_to_collision = curr_dist/(prev_dist-curr_dist);
+        TTC = frames_to_collision/frameRate;
+    } else{
+        TTC = -1;
     }
 }
+
+
+//bool in_box(DataFrame& frame, int kpt_idx, BoundingBox& box){
+//    auto keypoint = frame.keypoints[kpt_idx];
+//    if(box.roi.contains(keypoint.pt)) {
+//        return true;
+//    }else{
+//        return  false;
+//    }
+//}
+
+void assignKeypointsToBoxes(DataFrame &frame){
+    for(auto& box: frame.boundingBoxes)
+        for(int i=0; i<frame.keypoints.size(); i++)
+            if(box.roi.contains(frame.keypoints[i].pt)){
+                box.keypoints.push_back(frame.keypoints[i]);
+                box.keypointInds.insert(i);
+            }
+}
+
 
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
 {
@@ -168,10 +211,10 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
     std::map<int, std::map<int, int>> pre_matches;
 
     for(auto match: matches){
-        for(auto prevBox: prevFrame.boundingBoxes){
-            for(auto currBox: currFrame.boundingBoxes){
-                if(in_box(prevFrame, match.queryIdx, prevBox) &&
-                    in_box(currFrame, match.trainIdx, currBox)){
+        for(auto & prevBox: prevFrame.boundingBoxes){
+            for(auto & currBox: currFrame.boundingBoxes){
+                if(prevBox.keypointInds.count(match.queryIdx) >0 &&
+                    currBox.keypointInds.count(match.trainIdx) >0 ){
                     // if there is no entry for the current box yet, create it
                     if(pre_matches.find(prevBox.boxID)==pre_matches.end())
                         pre_matches[prevBox.boxID] = std::map<int, int>();
@@ -210,6 +253,6 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
     // now dump the results into the output, remember best_scores is keyed by currId not prevId
     for(auto const& x: best_scores){
         bbBestMatches[x.second.first] = x.first;
-        //cout << "matched boxes " << x.second.first << " and " << x.first << endl;
+        cout << "matched boxes " << x.second.first << " and " << x.first << endl;
     }
 }

@@ -169,6 +169,9 @@ int main(int argc, const char *argv[])
         // push keypoints and descriptor for current frame to end of data buffer
         (dataBuffer.end() - 1)->keypoints = keypoints;
 
+        // assign keypoints to boxes for future use
+        assignKeypointsToBoxes(*(dataBuffer.end() - 1));
+
         cout << "#5 : DETECT KEYPOINTS done" << endl;
 
 
@@ -221,7 +224,7 @@ int main(int argc, const char *argv[])
             (dataBuffer.end()-1)->bbMatches = bbBestMatches;
 
             cout << "#8 : TRACK 3D OBJECT BOUNDING BOXES done, found " << bbBestMatches.size() << " matches" << endl;
-            continue;
+
 
             /* COMPUTE TTC ON OBJECT IN FRONT */
 
@@ -253,6 +256,8 @@ int main(int argc, const char *argv[])
                     //// TASK FP.2 -> compute time-to-collision based on Lidar data (implement -> computeTTCLidar)
                     double ttcLidar; 
                     computeTTCLidar(prevBB->lidarPoints, currBB->lidarPoints, sensorFrameRate, ttcLidar);
+                    cout << it1 -> first << " "<< it1 -> second << " " << ttcLidar << endl;
+                    //continue;
                     //// EOF STUDENT ASSIGNMENT
 
                     //// STUDENT ASSIGNMENT
