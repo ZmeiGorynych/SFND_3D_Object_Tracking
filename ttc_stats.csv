@@ -1,4 +1,4 @@
-detector, descriptor, frame, lidar_ttc, image_ttc
+detector,descriptor,frame,lidar_ttc,image_ttc
 SHITOMASI,BRISK,9,12.1889,10.6861
 SHITOMASI,BRISK,14,11.6992,16.3571
 SHITOMASI,BRISK,16,9.37072,20.7376
