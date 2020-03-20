@@ -154,7 +154,7 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
     double ymean = ysum/count;
     double xstd = sqrt( xsumsq/count - xmean*xmean);
     double ystd = sqrt( ysumsq/count - ymean*ymean);
-    double std_thresh = 1.0;
+    double std_thresh = 2.0;
 
     for(auto& match: candidateMatches){
         auto prevKptLoc = kptsPrev[match.queryIdx].pt;
@@ -180,7 +180,7 @@ double median(std::vector<double> x){
 }
 
 // Compute time-to-collision (TTC) based on keypoint correspondences in successive images
-void _computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr,
+void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr,
                       std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC)
 {
     double minDist = 100.0;
@@ -191,9 +191,9 @@ void _computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyP
             auto match = kptMatches[i];
             auto match2 = kptMatches[j];
             double d0 =  cv::norm(kptsPrev[match.queryIdx].pt-kptsPrev[match2.queryIdx].pt);
-            double d1 =  cv::norm(kptsCurr[match.trainIdx].pt-kptsPrev[match2.trainIdx].pt);
-            if (d1 > minDist && d0> minDist)
-                ratios.emplace_back(d1/d0);
+            double d1 =  cv::norm(kptsCurr[match.trainIdx].pt-kptsCurr[match2.trainIdx].pt);
+            if (d0 > std::numeric_limits<double>::epsilon() && d1> minDist)
+                ratios.push_back(d1/d0);
         }
 
     }
@@ -203,56 +203,57 @@ void _computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyP
 
 }
 
-// Compute time-to-collision (TTC) based on keypoint correspondences in successive images
-void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr,
-                      std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC)
-{
-    // compute distance ratios between all matched keypoints
-    vector<double> distRatios; // stores the distance ratios for all keypoints between curr. and prev. frame
-    for (auto it1 = kptMatches.begin(); it1 != kptMatches.end() - 1; ++it1)
-    { // outer kpt. loop
-
-        // get current keypoint and its matched partner in the prev. frame
-        cv::KeyPoint kpOuterCurr = kptsCurr.at(it1->trainIdx);
-        cv::KeyPoint kpOuterPrev = kptsPrev.at(it1->queryIdx);
-
-        for (auto it2 = kptMatches.begin() + 1; it2 != kptMatches.end(); ++it2)
-        { // inner kpt.-loop
-
-            double minDist = 100.0; // min. required distance
-
-            // get next keypoint and its matched partner in the prev. frame
-            cv::KeyPoint kpInnerCurr = kptsCurr.at(it2->trainIdx);
-            cv::KeyPoint kpInnerPrev = kptsPrev.at(it2->queryIdx);
-
-            // compute distances and distance ratios
-            double distCurr = cv::norm(kpOuterCurr.pt - kpInnerCurr.pt);
-            double distPrev = cv::norm(kpOuterPrev.pt - kpInnerPrev.pt);
-
-            if (distPrev > std::numeric_limits<double>::epsilon() && distCurr >= minDist)
-            { // avoid division by zero
-
-                double distRatio = distCurr / distPrev;
-                distRatios.push_back(distRatio);
-            }
-        } // eof inner loop over all matched kpts
-    }     // eof outer loop over all matched kpts
-
-    // only continue if list of distance ratios is not empty
-    if (distRatios.size() == 0)
-    {
-        TTC = NAN;
-        return;
-    }
-
-    // compute camera-based TTC from distance ratios
-    double meanDistRatio = std::accumulate(distRatios.begin(), distRatios.end(), 0.0) / distRatios.size();
-
-    double dT = 1 / frameRate;
-    TTC = -dT / (1 - meanDistRatio);
-
-    // STUDENT TASK (replacement for meanDistRatio)
-}
+//// Compute time-to-collision (TTC) based on keypoint correspondences in successive images
+//void _computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr,
+//                      std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC)
+//{
+//    // compute distance ratios between all matched keypoints
+//    vector<double> distRatios; // stores the distance ratios for all keypoints between curr. and prev. frame
+//    for (auto it1 = kptMatches.begin(); it1 != kptMatches.end(); ++it1)
+//    { // outer kpt. loop
+//
+//        // get current keypoint and its matched partner in the prev. frame
+//        cv::KeyPoint kpOuterCurr = kptsCurr.at(it1->trainIdx);
+//        cv::KeyPoint kpOuterPrev = kptsPrev.at(it1->queryIdx);
+//
+//        for (auto it2 = kptMatches.begin(); it2 != kptMatches.end(); ++it2)
+//        { // inner kpt.-loop
+//
+//            double minDist = 100.0; // min. required distance
+//
+//            // get next keypoint and its matched partner in the prev. frame
+//            cv::KeyPoint kpInnerCurr = kptsCurr.at(it2->trainIdx);
+//            cv::KeyPoint kpInnerPrev = kptsPrev.at(it2->queryIdx);
+//
+//            // compute distances and distance ratios
+//            double distCurr = cv::norm(kpOuterCurr.pt - kpInnerCurr.pt);
+//            double distPrev = cv::norm(kpOuterPrev.pt - kpInnerPrev.pt);
+//
+//            if (distPrev > std::numeric_limits<double>::epsilon() && distCurr >= minDist)
+//            { // avoid division by zero
+//
+//                double distRatio = distCurr / distPrev;
+//                distRatios.push_back(distRatio);
+//            }
+//        } // eof inner loop over all matched kpts
+//    }     // eof outer loop over all matched kpts
+//
+//    // only continue if list of distance ratios is not empty
+//    if (distRatios.size() == 0)
+//    {
+//        TTC = NAN;
+//        return;
+//    }
+//
+//    // compute camera-based TTC from distance ratios
+//    //double meanDistRatio = std::accumulate(distRatios.begin(), distRatios.end(), 0.0) / distRatios.size();
+//
+//    double medianDistRatio = median(distRatios);
+//    double dT = 1 / frameRate;
+//    TTC = -dT / (1 - medianDistRatio);
+//
+//    // STUDENT TASK (replacement for meanDistRatio)
+//}
 
 struct NearnessSorter{
     inline bool operator() (const LidarPoint& p1, const LidarPoint& p2){
