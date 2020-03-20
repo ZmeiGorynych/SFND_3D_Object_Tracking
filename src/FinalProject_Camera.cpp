@@ -71,13 +71,31 @@ int main(int argc, const char *argv[])
     // misc
     double sensorFrameRate = 10.0 / imgStepWidth; // frames per second for Lidar and camera
     int dataBufferSize = 2;       // no. of images which are held in memory (ring buffer) at the same time
-    vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
-    bool bVis = false;            // visualize results
+
+    bool bVis = false;
+
+    vector<string> detectorTypes = {"SHITOMASI", "HARRIS", "FAST", "BRISK", "ORB", "AKAZE", "SIFT"};
+    // INCLUDING ORB IN THE BELOW CAUSES AN OUT OF MEMORY ERROR!
+    vector<string> descriptorKinds = {"BRISK", "BRIEF", "FREAK", "AKAZE", "SIFT", "ORB" };//
+
+    // visualize results
+    std::ofstream ttcstats;
+    ttcstats.open("/home/ubuntu/shared/GitHub/SFND/SFND_3D_Object_Tracking/ttc_stats.csv");
+    ttcstats << "detector, descriptor, frame, lidar_ttc, image_ttc" << endl;
+
+
+
 
     /* MAIN LOOP OVER ALL IMAGES */
-
+//    string detectorType = "SIFT";
+//    string descriptorType = "AKAZE"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+    for(string detectorType: detectorTypes)
+        for(string descriptorType: descriptorKinds){
+    vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
     for (size_t imgIndex = 0; imgIndex <= imgEndIndex - imgStartIndex; imgIndex+=imgStepWidth)
     {
+        if(detectorType.compare("SIFT")==0 && descriptorType.compare("ORB")==0)
+            continue; //this combination causes a memory leak so don't use it! https://knowledge.udacity.com/questions/71544
         /* LOAD IMAGE INTO BUFFER */
         cout << "Image Index " << imgIndex << endl;
         // assemble filenames for current index
@@ -150,7 +168,6 @@ int main(int argc, const char *argv[])
 
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        string detectorType = "SIFT";
         detKeypointsModern(keypoints, imgGray, detectorType, bVis);
         // optional : limit number of keypoints (helpful for debugging and learning)
         bool bLimitKpts = false;
@@ -178,7 +195,6 @@ int main(int argc, const char *argv[])
         /* EXTRACT KEYPOINT DESCRIPTORS */
 
         cv::Mat descriptors;
-        string descriptorType = "AKAZE"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
         descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors, descriptorType);
 
         // push descriptors for current frame to end of data buffer
@@ -193,7 +209,7 @@ int main(int argc, const char *argv[])
             /* MATCH KEYPOINT DESCRIPTORS */
 
             vector<cv::DMatch> matches;
-            string matcherType = "MAT_FLANN";        // MAT_BF, MAT_FLANN
+            string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
             string selectorType = "SEL_KNN";       // SEL_NN, SEL_KNN
 
             string descriptorBinaryHog; // DES_BINARY, DES_HOG
@@ -267,8 +283,9 @@ int main(int argc, const char *argv[])
                     clusterKptMatchesWithROI(*currBB, (dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->kptMatches);                    
                     computeTTCCamera((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, currBB->kptMatches, sensorFrameRate, ttcCamera);
                     //// EOF STUDENT ASSIGNMENT
-
-                    bVis = true;
+                    ttcstats << detectorType << "," << descriptorType << "," << imgIndex <<
+                             "," << ttcLidar << "," << ttcCamera << endl;
+                    bVis = false;
                     if (bVis)
                     {
                         cv::Mat visImg = (dataBuffer.end() - 1)->cameraImg.clone();
@@ -293,6 +310,7 @@ int main(int argc, const char *argv[])
         }
 
     } // eof loop over all images
-
+        }//eof loop over descriptor and detector types
+    ttcstats.close();
     return 0;
 }
